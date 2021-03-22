@@ -1,0 +1,24 @@
+version: '3.7'
+
+services:
+  postgres:
+    image: postgres:12.4
+    environment:
+      POSTGRES_USER: accounting
+      POSTGRES_PASSWORD: accounting
+      POSTGRES_DB: accounting
+    ports:
+      - 127.1.10.1:5432:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+  bot:
+    image: borodyadka/accounting-bot:latest
+    environment:
+      LOG_LEVEL: INFO
+      TELEGRAM_BOT_TOKEN: <paste bot token here>
+      DATABASE_URL: postgres://accounting:accounting@postgres:5432/accounting
+    depends_on:
+      - postgres
+
+volumes:
+  postgres: {}
