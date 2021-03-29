@@ -22,6 +22,7 @@ type Bot struct {
 func (b *Bot) handleError(chatID int64, err error) error {
 	if err, ok := err.(fmt.Stringer); ok {
 		_, _ = b.api.Send(tgbotapi.NewMessage(chatID, err.String())) // TODO: i18n
+		return nil
 	}
 	if _, ok := err.(*UnknownCommandError); !ok {
 		_, _ = b.api.Send(tgbotapi.NewMessage(chatID, "sorry, internal error :(")) // TODO: i18n

@@ -139,10 +139,12 @@ func (s *Repository) IterEntries(ctx context.Context, user *bot.User, from time.
 				entry.Comment,
 				entry.Tags,
 			); err != nil {
+				rows.Close()
 				return nil, err
 			}
 			result <- entry
 		}
+		rows.Close()
 
 		if count < limit {
 			break
