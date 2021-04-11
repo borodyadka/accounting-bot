@@ -103,12 +103,13 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 	case *DumpCommand:
 		// TODO
 	case *EntryCommand:
-		_, updated, err := b.storage.SaveEntry(ctx, user, &cmd.(*EntryCommand).Entry)
+		entry, updated, err := b.storage.SaveEntry(ctx, user, &cmd.(*EntryCommand).Entry)
 		if err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
 		if !updated {
-			_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Added")) // TODO: i18n, return sum and currency
+			// TODO: i18n
+			_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf("Added %.2f%s", entry.Value, entry.Currency)))
 		}
 		// TODO: if updated edit message
 		// TODO: save reply id to edit if original message was edited
