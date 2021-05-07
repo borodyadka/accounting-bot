@@ -3,6 +3,7 @@ package accounting_bot
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-telegram-bot-api/telegram-bot-api"
@@ -134,6 +135,25 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 				return b.handleError(msg.Chat.ID, err)
 			}
 		}
+	case *AddTagCommand:
+		cmd := cmd.(*AddTagCommand)
+		if err := b.storage.AddTag(ctx, user, cmd.SearchTag, cmd.Tags); err != nil {
+			return b.handleError(msg.Chat.ID, err)
+		}
+		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags added")) // TODO: i18n
+	case *RemoveTagCommand:
+		cmd := cmd.(*RemoveTagCommand)
+		if err := b.storage.RemoveTag(ctx, user, cmd.Tags); err != nil {
+			return b.handleError(msg.Chat.ID, err)
+		}
+		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags removed")) // TODO: i18n
+	case *ListTagsCommand:
+		cmd := cmd.(*ListTagsCommand)
+		tags, err := b.storage.ListTag(ctx, user, cmd.SearchTags)
+		if err != nil {
+			return b.handleError(msg.Chat.ID, err)
+		}
+		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags:\n" + strings.Join(tags, "\n"))) // TODO: i18n
 	}
 
 	return nil

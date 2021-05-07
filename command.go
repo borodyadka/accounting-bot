@@ -11,20 +11,25 @@ import (
 )
 
 var (
-	reHelp     = regexp.MustCompile(`^/help`)
-	reDump     = regexp.MustCompile(`^/(?P<cmd>dump\B)`)
-	reStat     = regexp.MustCompile(`^/(?P<cmd>(sum|max|maximum|min|minimum|avg|average|med|median)\B)`) // TODO
-	reStart    = regexp.MustCompile(`^/(?P<cmd>start)(\s+(?P<code>[\w\d]+))?`)
+	reHelp = regexp.MustCompile(`^/help`)
+	reDump = regexp.MustCompile(`^/(?P<cmd>dump\B)`)
+	reStat = regexp.MustCompile(`^/(?P<cmd>(sum|max|maximum|min|minimum|avg|average|med|median)\B)`) // TODO
+	// /start [code] - to authorize user
+	reStart = regexp.MustCompile(`^/(?P<cmd>start)(\s+(?P<code>[\w\d]+))?`)
+	// /currency RUB - to set user currency
 	reCurrency = regexp.MustCompile(`^/(?P<cmd>currency)(\s+(?P<code>[\w]{3}))`)
+	// /tag #burger #food - to add tag #food to all #burger entries
+	reTag = regexp.MustCompile(`^/tag\s+`)
+	// /untag #burger - to remove all #burger tags (not entries)
+	reUntag = regexp.MustCompile(`^/untag\s+`)
+	// /tags - list all tags and number of usages
+	// /tags #food - list all tags on entries with #food tag
+	reTags = regexp.MustCompile(`^/tags\s*`)
+	// <value> [comment with #hashtags]
 	reEntry    = regexp.MustCompile(`^(?P<value>\d+(\.\d+)?)(?P<comment>\s?.*)$`)
 	reHashTags = regexp.MustCompile(`(\B#[\p{L}\d]+)`)
 	rePeriod   = regexp.MustCompile(`(((?P<period>\d+)\s+)?(?P<modifier>years?|months?|weeks?|days?|hours?))`)
 	reFormat   = regexp.MustCompile(`(?P<format>csv|sqlite)`)
-	// TODO:
-	// /tag #burger #food - to add tag #food to all #burger entries
-	// /untag #burger - to remove all #burger tags (not entries)
-	// /tags - list all tags and number of usages
-	// /tags #food - list all tags on entries with #food tag
 )
 
 type Command interface{}
@@ -52,6 +57,19 @@ type StatCommand struct {
 
 type EntryCommand struct {
 	Entry Entry
+}
+
+type AddTagCommand struct {
+	SearchTag string
+	Tags      []string
+}
+
+type RemoveTagCommand struct {
+	Tags []string
+}
+
+type ListTagsCommand struct {
+	SearchTags []string
 }
 
 func extractHashTags(s string) []string {
@@ -138,6 +156,31 @@ func ParseCommand(message *tgbotapi.Message) (Command, error) {
 			return nil, &InvalidCurrencyError{Currency: m["code"]}
 		}
 		return &CurrencyCommand{Currency: m["code"]}, nil
+	}
+
+	if reTag.Match([]byte(s)) {
+		hashtags := extractHashTags(s)
+		if len(hashtags) < 2 {
+			return nil, &InvalidSyntaxError{ /*TODO: more info*/ }
+		}
+		return &AddTagCommand{
+			SearchTag: hashtags[0],
+			Tags:      hashtags[1:],
+		}, nil
+	}
+	if reUntag.Match([]byte(s)) {
+		hashtags := extractHashTags(s)
+		if len(hashtags) < 1 {
+			return nil, &InvalidSyntaxError{ /*TODO: more info*/ }
+		}
+		return &RemoveTagCommand{
+			Tags: hashtags,
+		}, nil
+	}
+	if reTags.Match([]byte(s)) {
+		return &ListTagsCommand{
+			SearchTags: extractHashTags(s),
+		}, nil
 	}
 
 	return nil, &UnknownCommandError{Command: s}

@@ -11,4 +11,7 @@ type Storage interface {
 	SaveEntry(ctx context.Context, user *User, command *Entry) (*Entry, error)
 	SaveReplyID(ctx context.Context, user *User, message, reply int64) error
 	IterEntries(ctx context.Context, user *User, from time.Time, tags []string) (<-chan *Entry, error)
+	AddTag(ctx context.Context, user *User, search string, tags []string) error
+	RemoveTag(ctx context.Context, user *User, tags []string) error
+	ListTag(ctx context.Context, user *User, search []string) ([]string, error)
 }
