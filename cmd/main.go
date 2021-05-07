@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	accbot "github.com/borodyadka/accounting-bot"
-	"github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"syscall"
+
+	accbot "github.com/borodyadka/accounting-bot"
+	"github.com/sirupsen/logrus"
 )
 
 type storageFactory func(url string) (accbot.Storage, error)

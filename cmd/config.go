@@ -1,11 +1,12 @@
 package main
 
 import (
+	"net/url"
+	"os"
+
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
-	"net/url"
-	"os"
 )
 
 var (

@@ -3,9 +3,10 @@ package accounting_bot
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/sirupsen/logrus"
-	"time"
 )
 
 const VERSION = 1
@@ -33,10 +34,12 @@ func (b *Bot) handleError(chatID int64, err error) error {
 
 func (b *Bot) handle(update *tgbotapi.Update) error {
 	var msg *tgbotapi.Message
+	updated := false
 	if update.Message != nil {
 		msg = update.Message
 	} else if update.EditedMessage != nil {
 		msg = update.EditedMessage
+		updated = true
 	} else {
 		return nil
 	}
@@ -103,16 +106,34 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 	case *DumpCommand:
 		// TODO
 	case *EntryCommand:
-		entry, updated, err := b.storage.SaveEntry(ctx, user, &cmd.(*EntryCommand).Entry)
+		entry, err := b.storage.SaveEntry(ctx, user, &cmd.(*EntryCommand).Entry)
 		if err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
 		if !updated {
 			// TODO: i18n
-			_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf("Added %.2f%s", entry.Value, entry.Currency)))
+			addedMsg, err := b.api.Send(tgbotapi.NewMessage(
+				msg.Chat.ID,
+				fmt.Sprintf("Added %.2f%s", entry.Value, entry.Currency)),
+			)
+			if err != nil {
+				return b.handleError(msg.Chat.ID, err)
+			}
+			entry.ReplyID = int64(addedMsg.MessageID)
+			if err = b.storage.SaveReplyID(ctx, user, entry.MessageID, int64(addedMsg.MessageID)); err != nil {
+				return b.handleError(msg.Chat.ID, err)
+			}
+		} else {
+			// TODO: i18n
+			_, err := b.api.Send(tgbotapi.NewEditMessageText(
+				msg.Chat.ID,
+				int(entry.ReplyID),
+				fmt.Sprintf("Added %.2f%s", entry.Value, entry.Currency),
+			))
+			if err != nil {
+				return b.handleError(msg.Chat.ID, err)
+			}
 		}
-		// TODO: if updated edit message
-		// TODO: save reply id to edit if original message was edited
 	}
 
 	return nil

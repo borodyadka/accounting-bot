@@ -15,7 +15,7 @@ func (f *Features) Scan(data interface{}) error {
 	return json.Unmarshal(data.([]byte), f)
 }
 
-// using for save user settings, version and possible multiple chat providers support
+// User struct using for save user settings, version and possible multiple chat providers support
 type User struct {
 	ID         string
 	TelegramID int64

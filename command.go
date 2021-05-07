@@ -1,12 +1,13 @@
 package accounting_bot
 
 import (
-	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"golang.org/x/text/currency"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"golang.org/x/text/currency"
 )
 
 var (

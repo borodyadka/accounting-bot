@@ -3,11 +3,12 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	bot "github.com/borodyadka/accounting-bot"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"strings"
-	"time"
 )
 
 const limit = 1024
@@ -57,47 +58,32 @@ func (s *Repository) GetUserByTelegramID(ctx context.Context, id int64) (*bot.Us
 	return user, nil
 }
 
-func (s *Repository) SaveEntry(ctx context.Context, user *bot.User, entry *bot.Entry) (*bot.Entry, bool, error) {
-	tx, err := s.pg.Begin(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	defer tx.Rollback(ctx)
-
-	var id string
-	err = tx.QueryRow(
-		ctx,
-		`SELECT "id"::TEXT FROM entries WHERE "user_id" = $1 AND "message_id" = $2`,
-		user.ID, entry.MessageID,
-	).Scan(&id)
-	if err != nil && err != pgx.ErrNoRows {
-		return nil, false, err
-	}
-	updated := id != ""
-
-	err = tx.QueryRow(
+func (s *Repository) SaveEntry(ctx context.Context, user *bot.User, entry *bot.Entry) (*bot.Entry, error) {
+	result := &bot.Entry{}
+	err := s.pg.QueryRow(
 		ctx,
 		`INSERT INTO entries ("user_id", "message_id", "reply_id", "currency", "value", "comment", "tags")
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT ("user_id", "message_id") DO UPDATE SET "value" = $5, "comment" = $6, "tags" = $7
-		RETURNING "id"::TEXT`,
+		ON CONFLICT ("user_id", "message_id") DO UPDATE
+			SET "value" = $5, "comment" = $6, "tags" = $7
+		RETURNING "id"::TEXT, "message_id", "reply_id", "currency", "value", "comment", "tags"`,
 		user.ID, entry.MessageID, entry.ReplyID, user.Currency, entry.Value, entry.Comment, entry.Tags,
-	).Scan(&id)
+	).Scan(
+		&result.ID, &result.MessageID, &result.ReplyID, &result.Currency, &result.Value, &result.Comment, &result.Tags,
+	)
 	if err != nil {
-		return nil, updated, err
+		return nil, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, updated, err
-	}
-	return &bot.Entry{
-		ID:        id,
-		Comment:   entry.Comment,
-		Tags:      entry.Tags,
-		Value:     entry.Value,
-		Currency:  user.Currency,
-		MessageID: entry.MessageID,
-		ReplyID:   entry.ReplyID,
-	}, updated, nil
+	return result, nil
+}
+
+func (s *Repository) SaveReplyID(ctx context.Context, user *bot.User, message, reply int64) error {
+	_, err := s.pg.Exec(
+		ctx,
+		`UPDATE entries SET "reply_id" = $1 WHERE "user_id" = $2 AND "message_id" = $3`,
+		reply, user.ID, message,
+	)
+	return err
 }
 
 func (s *Repository) IterEntries(ctx context.Context, user *bot.User, from time.Time, tags []string) (<-chan *bot.Entry, error) {

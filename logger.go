@@ -1,9 +1,10 @@
 package accounting_bot
 
 import (
-	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 type NamespaceHook struct {
