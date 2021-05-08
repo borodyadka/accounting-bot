@@ -73,7 +73,7 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 
 	switch cmd.(type) {
 	case *HelpCommand:
-		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, manual))
+		_, _ = b.api.Send(Markdown(tgbotapi.NewMessage(msg.Chat.ID, manual)))
 		return nil
 	case *StartCommand:
 		if user == nil {
@@ -92,10 +92,10 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 			}
 			_, _ = b.api.Send(
 				// TODO: i18n
-				tgbotapi.NewMessage(
+				Markdown(tgbotapi.NewMessage(
 					msg.Chat.ID,
-					fmt.Sprintf("Welcome aboard! Default currency is %s, to change send `/currency RUB`", user.Currency),
-				),
+					fmt.Sprintf("Welcome aboard! Selected currency is %s\nTo change send `/currency RUB`", user.Currency),
+				)),
 			)
 		}
 		return nil
