@@ -10,12 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type storageFactory func(url string) (accbot.Storage, error)
+type repositoryFactory func(url string) (accbot.Repository, error)
 
-var storages = make(map[string]storageFactory)
+var repositories = make(map[string]repositoryFactory)
 
-func registerStorage(provider string, factory storageFactory) {
-	storages[provider] = factory
+func registerRepository(provider string, factory repositoryFactory) {
+	repositories[provider] = factory
 }
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	}
 	logger := accbot.NewLogger(logLevel, "bot")
 
-	factory, sok := storages[databaseURL.Scheme]
+	factory, sok := repositories[databaseURL.Scheme]
 	if !sok {
 		logger.Fatalf(`unknown database type "%s"`, databaseURL.Scheme)
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-const limit = 1024
+const limit = 100_000
 
 type Repository struct {
 	pg *pgxpool.Pool
@@ -60,18 +60,25 @@ func (s *Repository) GetUserByTelegramID(ctx context.Context, id int64) (*bot.Us
 }
 
 func (s *Repository) SaveEntry(ctx context.Context, user *bot.User, entry *bot.Entry) (*bot.Entry, error) {
-	result := &bot.Entry{}
+	result := &bot.Entry{
+		CreatedAt: entry.CreatedAt,
+		Comment:   entry.Comment,
+		Tags:      entry.Tags[:],
+		Currency:  entry.Currency,
+		Value:     entry.Value,
+		MessageID: entry.MessageID,
+		ReplyID:   entry.ReplyID,
+	}
 	err := s.pg.QueryRow(
 		ctx,
-		`INSERT INTO "entries" ("user_id", "message_id", "reply_id", "currency", "value", "comment", "tags")
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO "entries"
+			("created_at", "user_id", "message_id", "reply_id", "currency", "value", "comment", "tags")
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT ("user_id", "message_id") DO UPDATE
-			SET "value" = $5, "comment" = $6, "tags" = $7
-		RETURNING "id"::TEXT, "message_id", "reply_id", "currency", "value", "comment", "tags"`,
-		user.ID, entry.MessageID, entry.ReplyID, user.Currency, entry.Value, entry.Comment, entry.Tags,
-	).Scan(
-		&result.ID, &result.MessageID, &result.ReplyID, &result.Currency, &result.Value, &result.Comment, &result.Tags,
-	)
+			SET "value" = $6, "comment" = $7, "tags" = $8
+		RETURNING "id"::TEXT`,
+		entry.CreatedAt, user.ID, entry.MessageID, entry.ReplyID, user.Currency, entry.Value, entry.Comment, entry.Tags,
+	).Scan(&result.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,17 +94,22 @@ func (s *Repository) SaveReplyID(ctx context.Context, user *bot.User, message, r
 	return err
 }
 
-func (s *Repository) IterEntries(ctx context.Context, user *bot.User, from time.Time, tags []string) (<-chan *bot.Entry, error) {
-	result := make(chan *bot.Entry)
-	defer close(result)
-
+func (s *Repository) GetAllEntries(
+	ctx context.Context, user *bot.User, from time.Time, tags []string,
+) ([]*bot.Entry, error) {
+	start := from
 	cond := []string{`"user_id" = $1`, "created_at > $2"}
 	if len(tags) > 0 {
 		cond = append(cond, "tags @> $3")
 	}
 
-	start := from
+	result := make([]*bot.Entry, 0, limit)
 	for {
+		args := []interface{}{user.ID, start}
+		if len(tags) > 0 {
+			args = append(args, tags)
+		}
+
 		rows, err := s.pg.Query(
 			ctx,
 			fmt.Sprintf(
@@ -106,7 +118,7 @@ func (s *Repository) IterEntries(ctx context.Context, user *bot.User, from time.
 				strings.Join(cond, " AND "),
 				limit,
 			),
-			user.ID, start, tags,
+			args...,
 		)
 		if err != nil {
 			return nil, err
@@ -115,21 +127,22 @@ func (s *Repository) IterEntries(ctx context.Context, user *bot.User, from time.
 		var count int
 		for rows.Next() {
 			count++
-			entry := new(bot.Entry)
+			entry := &bot.Entry{}
 			if err := rows.Scan(
-				entry.ID,
-				&start,
-				entry.MessageID,
-				entry.ReplyID,
-				entry.Currency,
-				entry.Value,
-				entry.Comment,
-				entry.Tags,
+				&entry.ID,
+				&entry.CreatedAt,
+				&entry.MessageID,
+				&entry.ReplyID,
+				&entry.Currency,
+				&entry.Value,
+				&entry.Comment,
+				&entry.Tags,
 			); err != nil {
 				rows.Close()
 				return nil, err
 			}
-			result <- entry
+			start = entry.CreatedAt
+			result = append(result, entry)
 		}
 		rows.Close()
 
@@ -196,7 +209,7 @@ func (s *Repository) ListTag(ctx context.Context, user *bot.User, search []strin
 	return tags, nil
 }
 
-func New(url string) (bot.Storage, error) {
+func New(url string) (bot.Repository, error) {
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err

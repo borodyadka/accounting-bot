@@ -21,7 +21,7 @@ type Bot struct {
 	logger  *logrus.Logger
 	token   string
 	api     *tgbotapi.BotAPI
-	storage Storage
+	storage Repository
 	config  Config
 	stopC   chan struct{}
 	doneC   chan struct{}
@@ -104,18 +104,43 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 	if user == nil || !user.Enabled {
 		return b.handleError(msg.Chat.ID, &UserNotFoundError{})
 	}
-	switch cmd.(type) {
+	// TODO: split into separate methods
+	switch cmd := cmd.(type) {
 	case *CurrencyCommand:
-		user.Currency = cmd.(*CurrencyCommand).Currency
+		user.Currency = cmd.Currency
 		_, err := b.storage.SaveUser(ctx, user)
 		if err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
 		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Saved")) // TODO: i18n
 	case *DumpCommand:
-		// TODO
+		// TODO: possible danger operation, on huge list of entries can cause oom and lots of gc time
+		items, err := b.storage.GetAllEntries(ctx, user, cmd.From, cmd.Tags)
+		if err != nil {
+			return b.handleError(msg.Chat.ID, err)
+		}
+		//_ = items
+		//for _, item := range items {
+		//	b.logger.WithField("item", item).Debug("dump")
+		//}
+		//b.logger.WithField("len", len(items)).Debug("items")
+		//b.logger.WithField("cmd", cmd).Debug("cmd")
+		rdr, err := DumpCsv(items)
+		if err != nil {
+			return b.handleError(msg.Chat.ID, err)
+		}
+		defer rdr.Close()
+		doc := tgbotapi.NewDocumentUpload(msg.Chat.ID, tgbotapi.FileReader{
+			Name:   time.Now().Format("20060102_150405") + ".csv",
+			Reader: rdr,
+			Size:   -1,
+		})
+		_, err = b.api.Send(doc)
+		if err != nil {
+			return b.handleError(msg.Chat.ID, err)
+		}
 	case *EntryCommand:
-		entry, err := b.storage.SaveEntry(ctx, user, &cmd.(*EntryCommand).Entry)
+		entry, err := b.storage.SaveEntry(ctx, user, &cmd.Entry)
 		if err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
@@ -140,7 +165,7 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 				fmt.Sprintf("Added %.2f%s", entry.Value, entry.Currency),
 			))
 			if err != nil && !strings.Contains(
-				// we should not send error back in thisspecial case
+				// we should not send error back in this special case
 				// only way to handle this error is compare text description
 				err.Error(),
 				"specified new message content and reply markup are exactly the same as a current content and reply markup of the message",
@@ -149,19 +174,16 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 			}
 		}
 	case *AddTagCommand:
-		cmd := cmd.(*AddTagCommand)
 		if err := b.storage.AddTag(ctx, user, cmd.SearchTag, cmd.Tags); err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
 		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags added")) // TODO: i18n
 	case *RemoveTagCommand:
-		cmd := cmd.(*RemoveTagCommand)
 		if err := b.storage.RemoveTag(ctx, user, cmd.Tags); err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
 		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags removed")) // TODO: i18n
 	case *ListTagsCommand:
-		cmd := cmd.(*ListTagsCommand)
 		tags, err := b.storage.ListTag(ctx, user, cmd.SearchTags)
 		if err != nil {
 			return b.handleError(msg.Chat.ID, err)
@@ -212,7 +234,7 @@ func (b *Bot) Stop() error {
 	return nil
 }
 
-func New(token string, logger *logrus.Logger, storage Storage, config Config) (*Bot, error) {
+func New(token string, logger *logrus.Logger, storage Repository, config Config) (*Bot, error) {
 	return &Bot{
 		logger:  logger,
 		token:   token,

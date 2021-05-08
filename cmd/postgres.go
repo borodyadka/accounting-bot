@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	registerStorage("postgres", func(url string) (accounting_bot.Storage, error) {
+	registerRepository("postgres", func(url string) (accounting_bot.Repository, error) {
 		return postgres.New(url)
 	})
 }

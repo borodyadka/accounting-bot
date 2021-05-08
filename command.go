@@ -12,7 +12,7 @@ import (
 
 var (
 	reHelp = regexp.MustCompile(`^/help`)
-	reDump = regexp.MustCompile(`^/(?P<cmd>dump\B)`)
+	reDump = regexp.MustCompile(`^/(?P<cmd>dump\s*)`)
 	reStat = regexp.MustCompile(`^/(?P<cmd>(sum|max|maximum|min|minimum|avg|average|med|median)\B)`) // TODO
 	// /start [code] - to authorize user
 	reStart = regexp.MustCompile(`^/(?P<cmd>start)(\s+(?P<code>[\w\d]+))?`)
@@ -26,10 +26,10 @@ var (
 	// /tags #food - list all tags on entries with #food tag
 	reTags = regexp.MustCompile(`^/tags\s*`)
 	// <value> [comment with #hashtags]
-	reEntry    = regexp.MustCompile(`^(?P<value>\d+(\.\d+)?)(?P<comment>\s?.*)$`)
-	reHashTags = regexp.MustCompile(`(\B#[\p{L}\d]+)`)
-	rePeriod   = regexp.MustCompile(`(((?P<period>\d+)\s+)?(?P<modifier>years?|months?|weeks?|days?|hours?))`)
-	reFormat   = regexp.MustCompile(`(?P<format>csv|sqlite)`)
+	reEntry      = regexp.MustCompile(`^(?P<value>\d+(\.\d+)?)(?P<comment>\s?.*)$`)
+	reHashTags   = regexp.MustCompile(`(\B#[\p{L}\d]+)`)
+	rePeriod     = regexp.MustCompile(`(((?P<period>\d+)\s+)?(?P<modifier>years?|months?|weeks?|days?|hours?))`)
+	reDumpFormat = regexp.MustCompile(`(?P<format>csv|sqlite)`)
 )
 
 type Command interface{}
@@ -99,6 +99,14 @@ func getPeriodBeginning(period int, modifier string) time.Time {
 	return result
 }
 
+func getDumpFormat(s string) string {
+	matches := reDumpFormat.FindAllString(s, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	return matches[0]
+}
+
 func ParseCommand(message *tgbotapi.Message) (Command, error) {
 	s := strings.TrimSpace(message.Text)
 	// show help
@@ -116,7 +124,7 @@ func ParseCommand(message *tgbotapi.Message) (Command, error) {
 			Format: "csv",
 			Tags:   extractHashTags(s),
 		}
-		if mf, ok := getMatches(reFormat, s); ok {
+		if mf, ok := getMatches(reDumpFormat, s); ok {
 			cmd.Format = mf["format"]
 		}
 		if mp, ok := getMatches(rePeriod, s); ok {
@@ -126,7 +134,7 @@ func ParseCommand(message *tgbotapi.Message) (Command, error) {
 				var err error
 				period, err = strconv.ParseInt(sp, 10, 32)
 				if err != nil {
-					return nil, NewInternalError(err)
+					return nil, &InvalidSyntaxError{ /*TODO: more info*/ }
 				}
 			}
 			cmd.From = getPeriodBeginning(int(period), mp["modifier"])
@@ -142,6 +150,7 @@ func ParseCommand(message *tgbotapi.Message) (Command, error) {
 		hashtags := extractHashTags(m["comment"])
 		return &EntryCommand{
 			Entry{
+				CreatedAt: time.Now(),
 				Comment:   strings.TrimSpace(m["comment"]),
 				Tags:      hashtags,
 				Value:     float32(value),
@@ -181,6 +190,26 @@ func ParseCommand(message *tgbotapi.Message) (Command, error) {
 		return &ListTagsCommand{
 			SearchTags: extractHashTags(s),
 		}, nil
+	}
+
+	if reDump.Match([]byte(s)) {
+		cmd := &DumpCommand{
+			Format: getDumpFormat(s),
+			Tags:   extractHashTags(s),
+		}
+		if mp, ok := getMatches(rePeriod, s); ok {
+			sp := strings.TrimSpace(mp["period"])
+			var period int64 = 1
+			if sp != "" {
+				var err error
+				period, err = strconv.ParseInt(sp, 10, 32)
+				if err != nil {
+					return nil, &InvalidSyntaxError{ /*TODO: more info*/ }
+				}
+			}
+			cmd.From = getPeriodBeginning(int(period), mp["modifier"])
+		}
+		return cmd, nil
 	}
 
 	return nil, &UnknownCommandError{Command: s}

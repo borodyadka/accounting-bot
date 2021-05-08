@@ -3,6 +3,7 @@ package accounting_bot
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"time"
 )
 
 type Features struct{}
@@ -27,6 +28,7 @@ type User struct {
 
 type Entry struct {
 	ID        string
+	CreatedAt time.Time
 	Comment   string
 	Tags      []string
 	Currency  string
