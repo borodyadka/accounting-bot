@@ -12,11 +12,17 @@ import (
 
 const VERSION = 1
 
+type Config struct {
+	AuthCode     string
+	AdminContact string
+}
+
 type Bot struct {
 	logger  *logrus.Logger
 	token   string
 	api     *tgbotapi.BotAPI
 	storage Storage
+	config  Config
 	stopC   chan struct{}
 	doneC   chan struct{}
 }
@@ -71,8 +77,11 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 		return nil
 	case *StartCommand:
 		if user == nil {
-			// TODO: check auth code
-			_, err := b.storage.SaveUser(ctx, &User{
+			cmd := cmd.(*StartCommand)
+			if b.config.AuthCode != "" && cmd.Code != b.config.AuthCode {
+				return b.handleError(msg.Chat.ID, &InvalidAuthCodeError{})
+			}
+			user, err = b.storage.SaveUser(ctx, &User{
 				TelegramID: msg.Chat.ID,
 				Enabled:    true,
 				Currency:   "USD",
@@ -85,12 +94,11 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 				// TODO: i18n
 				tgbotapi.NewMessage(
 					msg.Chat.ID,
-					"Welcome aboard! Default currency is USD, to change send `/currency RUB`",
+					fmt.Sprintf("Welcome aboard! Default currency is %s, to change send `/currency RUB`", user.Currency),
 				),
 			)
-			return nil
 		}
-		return b.handleError(msg.Chat.ID, &UserNotFoundError{})
+		return nil
 	}
 
 	if user == nil || !user.Enabled {
@@ -131,7 +139,12 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 				int(entry.ReplyID),
 				fmt.Sprintf("Added %.2f%s", entry.Value, entry.Currency),
 			))
-			if err != nil {
+			if err != nil && !strings.Contains(
+				// we should not send error back in thisspecial case
+				// only way to handle this error is compare text description
+				err.Error(),
+				"specified new message content and reply markup are exactly the same as a current content and reply markup of the message",
+			) {
 				return b.handleError(msg.Chat.ID, err)
 			}
 		}
@@ -153,7 +166,7 @@ func (b *Bot) handle(update *tgbotapi.Update) error {
 		if err != nil {
 			return b.handleError(msg.Chat.ID, err)
 		}
-		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags:\n" + strings.Join(tags, "\n"))) // TODO: i18n
+		_, _ = b.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "Tags:\n"+strings.Join(tags, "\n"))) // TODO: i18n
 	}
 
 	return nil
@@ -199,11 +212,12 @@ func (b *Bot) Stop() error {
 	return nil
 }
 
-func New(token string, logger *logrus.Logger, storage Storage) (*Bot, error) {
+func New(token string, logger *logrus.Logger, storage Storage, config Config) (*Bot, error) {
 	return &Bot{
 		logger:  logger,
 		token:   token,
 		storage: storage,
+		config:  config,
 		stopC:   make(chan struct{}, 1),
 		doneC:   make(chan struct{}, 1),
 	}, nil

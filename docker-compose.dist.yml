@@ -17,6 +17,7 @@ services:
       LOG_LEVEL: INFO
       TELEGRAM_BOT_TOKEN: <paste bot token here>
       DATABASE_URL: postgres://accounting:accounting@postgres:5432/accounting
+      AUTH_CODE: my-secret-code
     depends_on:
       - postgres
 

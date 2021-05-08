@@ -59,6 +59,17 @@ func (UserNotFoundError) String() string {
 	return "user not found or not enabled"
 }
 
+type InvalidAuthCodeError struct {
+}
+
+func (e InvalidAuthCodeError) Error() string {
+	return e.String()
+}
+
+func (e InvalidAuthCodeError) String() string {
+	return "invalid auth code"
+}
+
 type InvalidCurrencyError struct {
 	Currency string
 }

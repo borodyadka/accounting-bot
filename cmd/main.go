@@ -33,7 +33,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	bot, err := accbot.New(botToken, logger, storage)
+	bot, err := accbot.New(botToken, logger, storage, botConfig)
 	if err != nil {
 		logger.Fatal(err)
 	}

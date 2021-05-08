@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 
+	accbot "github.com/borodyadka/accounting-bot"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
@@ -13,7 +14,9 @@ var (
 	logLevel    log.Level
 	databaseURL *url.URL
 	botToken    string
-	authCode    string
+	botConfig   = accbot.Config{
+		AuthCode: "",
+	}
 )
 
 type specification struct {
@@ -53,7 +56,7 @@ func parseConfig() error {
 		log.Fatal("TELEGRAM_BOT_TOKEN is not provided")
 	}
 
-	authCode = config.AuthCode
+	botConfig.AuthCode = config.AuthCode
 
 	return nil
 }
